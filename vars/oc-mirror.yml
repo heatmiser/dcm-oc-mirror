@@ -1,0 +1,14 @@
+---
+dcm_oc_mirror_image: quay.io/s4v0/dcm-oc-mirror
+dcm_oc_mirror_image_tag: latest
+dcm_oc_mirror_mode: direct
+dcm_oc_mirror_workspace_dir: /srv/containers/oc-mirror/workspace
+dcm_oc_mirror_config_dir: /srv/containers/oc-mirror/config
+dcm_oc_mirror_archive_dir: /srv/containers/oc-mirror/archives
+dcm_oc_mirror_pull_secret_path: /srv/containers/oc-mirror/pull-secret.json
+dcm_oc_mirror_ocp_version: "4.16"
+dcm_oc_mirror_ocp_channel: "stable-{{ dcm_oc_mirror_ocp_version }}"
+dcm_oc_mirror_target_registry: "registry.example.com:8443"
+dcm_oc_mirror_operators: []
+dcm_oc_mirror_additional_images: []
+...

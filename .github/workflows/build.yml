@@ -1,0 +1,41 @@
+---
+name: Build and Push Container Image
+
+on:  # yamllint disable-line rule:truthy
+  push:
+    branches:
+      - main
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    environment: deploy
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Log in to quay.io
+        uses: redhat-actions/podman-login@v1
+        with:
+          registry: quay.io
+          username: ${{ secrets.QUAY_USERNAME }}
+          password: ${{ secrets.QUAY_PASSWORD }}
+
+      - name: Build container image
+        run: |
+          podman build \
+            -t dcm-oc-mirror:latest \
+            -t dcm-oc-mirror:${{ github.sha }} \
+            .
+
+      - name: Push to quay.io
+        uses: redhat-actions/push-to-registry@v2
+        with:
+          image: dcm-oc-mirror
+          tags: latest ${{ github.sha }}
+          registry: quay.io/${{ secrets.QUAY_USERNAME }}
+          username: ${{ secrets.QUAY_USERNAME }}
+          password: ${{ secrets.QUAY_PASSWORD }}
+...

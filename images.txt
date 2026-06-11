@@ -1,0 +1,1 @@
+quay.io/s4v0/dcm-oc-mirror:latest

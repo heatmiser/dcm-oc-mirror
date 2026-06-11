@@ -1,0 +1,35 @@
+---
+- name: Mirror OCP content with oc-mirror
+  hosts: all
+  vars_files:
+    - "{{ playbook_dir }}/../vars/oc-mirror.yml"
+  tasks:
+    - name: Validate dcm_oc_mirror_mode
+      ansible.builtin.assert:
+        that:
+          - dcm_oc_mirror_mode in ['direct', 'archive_create', 'archive_load']
+        fail_msg: >-
+          dcm_oc_mirror_mode must be one of: direct, archive_create, archive_load.
+          Got: {{ dcm_oc_mirror_mode }}
+
+    - name: Ensure oc-mirror directories exist
+      ansible.builtin.file:
+        path: "{{ item }}"
+        state: directory
+        mode: '0750'
+      loop:
+        - "{{ dcm_oc_mirror_workspace_dir }}"
+        - "{{ dcm_oc_mirror_config_dir }}"
+        - "{{ dcm_oc_mirror_archive_dir }}"
+
+    - name: Render imageset-config.yaml
+      ansible.builtin.template:
+        src: "{{ playbook_dir }}/templates/imageset-config.yaml.j2"
+        dest: "{{ dcm_oc_mirror_config_dir }}/imageset-config.yaml"
+        mode: '0640'
+      when: dcm_oc_mirror_mode in ['direct', 'archive_create']
+
+    - name: Run oc-mirror
+      ansible.builtin.include_tasks:
+        file: "{{ playbook_dir }}/../tasks/run_mirror.yml"
+...

@@ -1,0 +1,25 @@
+{{ ansible_managed | comment }}
+---
+kind: ImageSetConfiguration
+apiVersion: mirror.openshift.io/v2alpha1
+mirror:
+  platform:
+    channels:
+      - name: {{ dcm_oc_mirror_ocp_channel }}
+        type: ocp
+{% if dcm_oc_mirror_operators | length > 0 %}
+  operators:
+{% for op in dcm_oc_mirror_operators %}
+    - catalog: {{ op.catalog }}
+      packages:
+{% for pkg in op.packages %}
+        - name: {{ pkg.name }}
+{% endfor %}
+{% endfor %}
+{% endif %}
+{% if dcm_oc_mirror_additional_images | length > 0 %}
+  additionalImages:
+{% for img in dcm_oc_mirror_additional_images %}
+    - name: {{ img }}
+{% endfor %}
+{% endif %}

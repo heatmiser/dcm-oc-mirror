@@ -1,0 +1,65 @@
+---
+- name: Sub | Run oc-mirror in direct mode
+  ansible.builtin.command:
+    argv:
+      - podman
+      - run
+      - --rm
+      - -v
+      - "{{ dcm_oc_mirror_pull_secret_path }}:/root/.docker/config.json:ro,Z"
+      - -v
+      - "{{ dcm_oc_mirror_config_dir }}/imageset-config.yaml:/imageset-config.yaml:ro,Z"
+      - -v
+      - "{{ dcm_oc_mirror_workspace_dir }}:/workspace:Z"
+      - "{{ dcm_oc_mirror_image }}:{{ dcm_oc_mirror_image_tag }}"
+      - --v2
+      - --config
+      - /imageset-config.yaml
+      - --workspace
+      - /workspace
+      - "docker://{{ dcm_oc_mirror_target_registry }}"
+  changed_when: true
+  when: dcm_oc_mirror_mode == 'direct'
+
+- name: Sub | Run oc-mirror in archive create mode
+  ansible.builtin.command:
+    argv:
+      - podman
+      - run
+      - --rm
+      - -v
+      - "{{ dcm_oc_mirror_pull_secret_path }}:/root/.docker/config.json:ro,Z"
+      - -v
+      - "{{ dcm_oc_mirror_config_dir }}/imageset-config.yaml:/imageset-config.yaml:ro,Z"
+      - -v
+      - "{{ dcm_oc_mirror_workspace_dir }}:/workspace:Z"
+      - -v
+      - "{{ dcm_oc_mirror_archive_dir }}:/archives:Z"
+      - "{{ dcm_oc_mirror_image }}:{{ dcm_oc_mirror_image_tag }}"
+      - --v2
+      - --config
+      - /imageset-config.yaml
+      - --workspace
+      - /workspace
+      - file:///archives
+  changed_when: true
+  when: dcm_oc_mirror_mode == 'archive_create'
+
+- name: Sub | Run oc-mirror in archive load mode
+  ansible.builtin.command:
+    argv:
+      - podman
+      - run
+      - --rm
+      - -v
+      - "{{ dcm_oc_mirror_pull_secret_path }}:/root/.docker/config.json:ro,Z"
+      - -v
+      - "{{ dcm_oc_mirror_archive_dir }}:/archives:ro,Z"
+      - "{{ dcm_oc_mirror_image }}:{{ dcm_oc_mirror_image_tag }}"
+      - --v2
+      - --from
+      - file:///archives
+      - "docker://{{ dcm_oc_mirror_target_registry }}"
+  changed_when: true
+  when: dcm_oc_mirror_mode == 'archive_load'
+...
