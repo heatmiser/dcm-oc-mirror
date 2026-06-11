@@ -207,6 +207,57 @@ The target registry must be running and reachable before executing `direct` or `
 mode. When using dcm-quay as the target, ensure the dcm-quay stack is fully started before
 running this playbook.
 
+## Image-mode Filesystem Considerations
+
+When running on an image-mode (bootc) system such as dcm-bootstrap, the placement of
+`dcm_oc_mirror_workspace_dir`, `dcm_oc_mirror_config_dir`, and `dcm_oc_mirror_archive_dir`
+determines whether their contents survive two distinct events: container image updates and
+bootc system upgrades. The default paths are intentional — this section explains why and
+provides guidance for operators who need to override them.
+
+### How the bootc filesystem works
+
+Image-mode RHEL uses a composefs root. On every bootc upgrade, `/usr` is replaced with the
+content of the new image. `/var` is never touched by the upgrade mechanism — it is a live,
+fully writable filesystem that persists across reboots, upgrades, and the entire operational
+life of the system.
+
+The phrase "seeded once" in bootc documentation refers only to what bootc does at initial
+install: content baked into `/var` in the Containerfile is written to the live `/var`
+partition one time. After that, `/var` is a normal writable filesystem. Services, containers,
+and playbooks read and write it freely — Day 1, Day 2, and every subsequent run.
+
+On image-mode RHEL, `/srv` is a symlink to `/var/srv`. The default paths
+(`/srv/containers/oc-mirror/...`) therefore resolve to `/var/srv/containers/oc-mirror/...`
+and inherit all the persistence and writability of `/var`.
+
+### Survival across both update events
+
+| Event | Effect on workspace, config, and archive directories |
+| --- | --- |
+| dcm-oc-mirror container image update | No effect — directories are volume-mounted from the host at runtime; the container image contains only the oc-mirror binary |
+| bootc system upgrade | No effect — directories are under `/var` (via `/srv` → `/var/srv`); bootc never modifies `/var` during an upgrade |
+| Day 2 and subsequent mirror runs | Directories are fully writable at runtime — oc-mirror accumulates workspace state across every run, enabling incremental mirroring |
+
+### Path selection guidance
+
+Operators overriding the default paths must choose locations that are mutable at runtime and
+persistent across upgrades. On image-mode systems:
+
+| Path prefix | Image-mode behavior | Suitable |
+| --- | --- | --- |
+| `/var/` | Mutable at runtime, persistent — never touched by bootc upgrade | Yes |
+| `/srv/` → `/var/srv/` | Mutable at runtime, persistent — symlink into `/var` (default) | Yes |
+| `/usr/` | Immutable composefs — replaced on every upgrade | No |
+| `/opt/` | Immutable composefs — replaced on every upgrade | No |
+| `/etc/` | Mutable, but subject to 3-way merge on upgrade — corrupts binary state files | No |
+| `/tmp/` or `/run/` | Ephemeral — cleared on reboot | No |
+
+The workspace directory must survive across runs for incremental mirroring to function
+correctly. Placing it under `/tmp` or `/run` causes oc-mirror to treat every execution as
+a first run and re-mirror the full catalog, which is both slow and produces oversized archives
+in `archive_create` mode.
+
 ## Variables Reference
 
 | Variable | Default | Description |
