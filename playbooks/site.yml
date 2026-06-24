@@ -12,6 +12,43 @@
           dcm_oc_mirror_mode must be one of: direct, archive_create, archive_load.
           Got: {{ dcm_oc_mirror_mode }}
 
+    - name: Load operators from dcm-bootstrap config.yaml
+      when: dcm_bootstrap_config_path | length > 0
+      block:
+        - name: Read dcm-bootstrap config.yaml
+          ansible.builtin.slurp:
+            src: "{{ dcm_bootstrap_config_path }}"
+          register: _bootstrap_config_raw
+
+        - name: Parse dcm-bootstrap config.yaml
+          ansible.builtin.set_fact:
+            _bootstrap_config: "{{ _bootstrap_config_raw.content | b64decode | from_yaml }}"
+
+        - name: Assert all declared catalog names are known
+          ansible.builtin.assert:
+            that:
+              - cat.name in dcm_oc_mirror_catalog_index_map
+            fail_msg: >-
+              Unknown catalog name '{{ cat.name }}' in operators.catalogs.
+              Valid names: {{ dcm_oc_mirror_catalog_index_map.keys() | list | join(', ') }}
+          loop: "{{ _bootstrap_config.operators.catalogs | default([]) }}"
+          loop_control:
+            loop_var: cat
+
+        - name: Derive dcm_oc_mirror_operators from operators stanza
+          ansible.builtin.set_fact:
+            dcm_oc_mirror_operators: >-
+              {%- set result = [] -%}
+              {%- for cat in _bootstrap_config.operators.catalogs | default([]) -%}
+                {%- set catalog_url = dcm_oc_mirror_catalog_index_map[cat.name] ~ ':v' ~ dcm_oc_mirror_ocp_version -%}
+                {%- set pkgs = [] -%}
+                {%- for pkg in cat.packages | default([]) -%}
+                  {%- set _ = pkgs.append({'name': pkg.name, 'channels': [pkg.channel]}) -%}
+                {%- endfor -%}
+                {%- set _ = result.append({'catalog': catalog_url, 'packages': pkgs}) -%}
+              {%- endfor -%}
+              {{ result }}
+
     - name: Ensure oc-mirror directories exist
       ansible.builtin.file:
         path: "{{ item }}"
