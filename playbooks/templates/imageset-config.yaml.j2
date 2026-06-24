@@ -4,6 +4,9 @@ kind: ImageSetConfiguration
 apiVersion: mirror.openshift.io/v2alpha1
 mirror:
   platform:
+{% if dcm_oc_mirror_graph %}
+    graph: true
+{% endif %}
     channels:
       - name: {{ dcm_oc_mirror_ocp_channel }}
         type: ocp
@@ -14,6 +17,12 @@ mirror:
       packages:
 {% for pkg in op.packages %}
         - name: {{ pkg.name }}
+{% if pkg.channels | default([]) | length > 0 %}
+          channels:
+{% for ch in pkg.channels %}
+            - {{ ch }}
+{% endfor %}
+{% endif %}
 {% endfor %}
 {% endfor %}
 {% endif %}
@@ -23,3 +32,4 @@ mirror:
     - name: {{ img }}
 {% endfor %}
 {% endif %}
+  helm: {}

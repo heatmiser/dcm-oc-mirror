@@ -1,9 +1,7 @@
 ---
 - name: Sub | Run oc-mirror in direct mode
-  ansible.builtin.command:
-    argv:
-      - podman
-      - run
+  vars:
+    _run_opts:
       - --rm
       - -v
       - "{{ dcm_oc_mirror_pull_secret_path }}:/root/.docker/config.json:ro,Z"
@@ -11,6 +9,10 @@
       - "{{ dcm_oc_mirror_config_dir }}/imageset-config.yaml:/imageset-config.yaml:ro,Z"
       - -v
       - "{{ dcm_oc_mirror_workspace_dir }}:/workspace:Z"
+    _env_opt: >-
+      {{ ['-e', 'UPDATE_URL_OVERRIDE=' ~ dcm_oc_mirror_update_url_override]
+         if dcm_oc_mirror_update_url_override | length > 0 else [] }}
+    _mirror_cmd:
       - "{{ dcm_oc_mirror_image }}:{{ dcm_oc_mirror_image_tag }}"
       - --v2
       - --config
@@ -18,14 +20,14 @@
       - --workspace
       - /workspace
       - "docker://{{ dcm_oc_mirror_target_registry }}"
+  ansible.builtin.command:
+    argv: "{{ ['podman', 'run'] + _run_opts + _env_opt + _mirror_cmd }}"
   changed_when: true
   when: dcm_oc_mirror_mode == 'direct'
 
 - name: Sub | Run oc-mirror in archive create mode
-  ansible.builtin.command:
-    argv:
-      - podman
-      - run
+  vars:
+    _run_opts:
       - --rm
       - -v
       - "{{ dcm_oc_mirror_pull_secret_path }}:/root/.docker/config.json:ro,Z"
@@ -35,6 +37,10 @@
       - "{{ dcm_oc_mirror_workspace_dir }}:/workspace:Z"
       - -v
       - "{{ dcm_oc_mirror_archive_dir }}:/archives:Z"
+    _env_opt: >-
+      {{ ['-e', 'UPDATE_URL_OVERRIDE=' ~ dcm_oc_mirror_update_url_override]
+         if dcm_oc_mirror_update_url_override | length > 0 else [] }}
+    _mirror_cmd:
       - "{{ dcm_oc_mirror_image }}:{{ dcm_oc_mirror_image_tag }}"
       - --v2
       - --config
@@ -42,6 +48,8 @@
       - --workspace
       - /workspace
       - file:///archives
+  ansible.builtin.command:
+    argv: "{{ ['podman', 'run'] + _run_opts + _env_opt + _mirror_cmd }}"
   changed_when: true
   when: dcm_oc_mirror_mode == 'archive_create'
 

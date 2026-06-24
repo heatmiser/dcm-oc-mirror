@@ -11,4 +11,30 @@ dcm_oc_mirror_ocp_channel: "stable-{{ dcm_oc_mirror_ocp_version }}"
 dcm_oc_mirror_target_registry: "registry.example.com:8443"
 dcm_oc_mirror_operators: []
 dcm_oc_mirror_additional_images: []
+
+# Set true to include the Cincinnati update graph bundle in the mirror.
+# Enables air-gapped upgrade path discovery via a self-hosted OSUS instance (Gap 7).
+# When true, also set dcm_oc_mirror_update_url_override on connected (low-side) builds
+# so oc-mirror can reach the public Cincinnati endpoint at graph.openshift.io.
+dcm_oc_mirror_graph: false
+
+# When non-empty, passed to the oc-mirror container as UPDATE_URL_OVERRIDE.
+# Required when dcm_oc_mirror_graph is true and the build host has internet access.
+# Applies to direct and archive_create modes only; archive_load never contacts Cincinnati.
+# Example: https://api.openshift.com/api/upgrades_info/graph
+dcm_oc_mirror_update_url_override: ""
+
+# When non-empty, site.yml reads this path as a dcm-bootstrap config.yaml and derives
+# dcm_oc_mirror_operators from the operators.catalogs[] stanza automatically.
+# When empty, the caller must supply dcm_oc_mirror_operators directly.
+dcm_bootstrap_config_path: ""
+
+# Mapping from OperatorHub catalog name to Red Hat index image base path.
+# Source: https://docs.openshift.com/container-platform/latest/operators/admin/olm-managing-custom-catalogs.html
+# Verify against oc-mirror release notes on OCP major version bumps.
+dcm_oc_mirror_catalog_index_map:
+  redhat-operators: registry.redhat.io/redhat/redhat-operator-index
+  certified-operators: registry.redhat.io/redhat/certified-operator-index
+  community-operators: registry.redhat.io/redhat/community-operator-index
+  redhat-marketplace: registry.redhat.io/redhat/redhat-marketplace-index
 ...

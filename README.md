@@ -272,5 +272,80 @@ in `archive_create` mode.
 | `dcm_oc_mirror_ocp_version` | `4.16` | OCP version to mirror |
 | `dcm_oc_mirror_ocp_channel` | `stable-{{ dcm_oc_mirror_ocp_version }}` | OCP update channel |
 | `dcm_oc_mirror_target_registry` | `registry.example.com:8443` | Target registry hostname and port |
-| `dcm_oc_mirror_operators` | `[]` | List of operator catalogs and packages to mirror |
+| `dcm_oc_mirror_operators` | `[]` | List of operator catalogs and packages to mirror. Populated automatically when `dcm_bootstrap_config_path` is set; otherwise supplied by the caller |
 | `dcm_oc_mirror_additional_images` | `[]` | List of additional image references to mirror |
+| `dcm_oc_mirror_graph` | `false` | Include the Cincinnati update graph bundle in the mirror. Required for air-gapped upgrade path support via OSUS. Set `dcm_oc_mirror_update_url_override` alongside this on connected builds |
+| `dcm_oc_mirror_update_url_override` | `""` | Passed to the oc-mirror container as `UPDATE_URL_OVERRIDE`. Required when `dcm_oc_mirror_graph: true` on a connected build so oc-mirror can reach the public Cincinnati endpoint. Applies to `direct` and `archive_create` modes only |
+| `dcm_bootstrap_config_path` | `""` | Path to a dcm-bootstrap `config.yaml` file. When set, the `operators.catalogs[]` stanza is read and used to derive `dcm_oc_mirror_operators` automatically. Catalog names are validated against `dcm_oc_mirror_catalog_index_map` |
+| `dcm_oc_mirror_catalog_index_map` | see `vars/oc-mirror.yml` | Mapping from OperatorHub catalog name to Red Hat index image base path. Covers `redhat-operators`, `certified-operators`, `community-operators`, and `redhat-marketplace`. Override to add custom catalog entries |
+
+## Operator Catalog Mirroring
+
+Operator content requires two things in the mirror: the pruned OLM catalog index image and all
+operator container images referenced by it. Both are handled by the `operators:` block in
+`imageset-config.yaml`, which this playbook generates from `dcm_oc_mirror_operators`.
+
+### Specifying operators
+
+**Option A — config.yaml integration (recommended when using dcm-bootstrap)**
+
+Set `dcm_bootstrap_config_path` to the path of your dcm-bootstrap `config.yaml`. The
+`operators.catalogs[]` stanza is read and converted to `dcm_oc_mirror_operators`
+automatically. Catalog names are validated at run time against the known Red Hat index map.
+
+```yaml
+# vars/oc-mirror.yml overrides or -e extra vars:
+dcm_bootstrap_config_path: /path/to/config.yaml
+dcm_oc_mirror_ocp_version: "4.22"
+dcm_oc_mirror_target_registry: "192.168.1.1:8443"
+```
+
+**Option B — manual operator list**
+
+Supply `dcm_oc_mirror_operators` directly using fully-qualified catalog index image references:
+
+```yaml
+dcm_oc_mirror_operators:
+  - catalog: registry.redhat.io/redhat/redhat-operator-index:v4.22
+    packages:
+      - name: odf-operator
+        channels:
+          - stable-4.22
+      - name: openshift-gitops-operator
+        channels:
+          - latest
+      - name: updateservice-operator
+        channels:
+          - v1
+```
+
+### Cincinnati graph bundle
+
+To support air-gapped OCP upgrades via a self-hosted
+[OpenShift Update Service (OSUS)](https://docs.openshift.com/container-platform/latest/updating/understanding_updates/understanding-update-channels-release.html),
+the Cincinnati update graph must be included in the mirror. Enable it with `dcm_oc_mirror_graph: true`.
+
+On a connected build host (`direct` or `archive_create` mode), also set
+`dcm_oc_mirror_update_url_override` so oc-mirror can reach the public Cincinnati endpoint:
+
+```yaml
+dcm_oc_mirror_graph: true
+dcm_oc_mirror_update_url_override: "https://api.openshift.com/api/upgrades_info/graph"
+```
+
+In `archive_load` mode, graph data is already bundled inside the archive from the
+`archive_create` run — `dcm_oc_mirror_update_url_override` is not used.
+
+### Full connected low-side build example
+
+```bash
+ansible-playbook -i inventory playbooks/site.yml \
+  -e dcm_bootstrap_config_path=/path/to/config.yaml \
+  -e dcm_oc_mirror_ocp_version=4.22 \
+  -e dcm_oc_mirror_target_registry=192.168.1.1:8443 \
+  -e dcm_oc_mirror_graph=true \
+  -e 'dcm_oc_mirror_update_url_override=https://api.openshift.com/api/upgrades_info/graph'
+```
+
+The playbook reads `config.yaml`, validates catalog names, derives the operator list,
+renders `imageset-config.yaml` (with graph and operator sections), and runs oc-mirror.
