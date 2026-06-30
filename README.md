@@ -170,6 +170,64 @@ The archive directory path on the bootstrap node must match `dcm_oc_mirror_archi
    ansible-playbook -i inventory playbooks/site.yml
    ```
 
+## Workspace State Management
+
+The oc-mirror workspace at `dcm_oc_mirror_workspace_dir` is a **versioned build artifact**,
+not a throwaway cache. It must be preserved and transported alongside the mirrored content
+output after every build.
+
+### Why the workspace matters
+
+oc-mirror v2 tracks every image it has mirrored in the workspace. On Day 2 and subsequent
+runs, it computes the diff between the current `imageset-config.yaml` and the recorded
+workspace state, then mirrors only what has changed. If the workspace is absent or was
+produced against a different `imageset-config.yaml`, oc-mirror treats the run as a first
+run and re-mirrors the full catalog from scratch.
+
+Depending on the OCP version and operator selection, a full re-mirror requires between
+**50 GB and 200+ GB** of data transfer and can run for several hours. Preserving the
+workspace reduces subsequent runs to a fraction of that cost.
+
+### Persisting the workspace alongside the build output
+
+After each successful mirror run, archive the workspace directory alongside the appliance
+image — they are a matched pair. The workspace encodes the content state of the registry or
+archive produced by that run and must be present for the next run to produce only the delta.
+
+Recommended layout:
+
+```
+build-artifacts/
+├── dcm-bootstrap-v1.2.0.iso          # appliance image
+├── oc-mirror-archive/                # archive output (archive_create mode)
+│   └── mirror_seq001_000000.tar
+└── oc-mirror-workspace/              # workspace — archive alongside the ISO
+    └── ...
+```
+
+Restore the workspace directory to `dcm_oc_mirror_workspace_dir` on the execution host
+before the next mirror run. Running without the workspace is not a recoverable state — it
+causes a full re-mirror, not an error.
+
+### Ephemeral build environments
+
+When oc-mirror runs inside a CI pipeline or a temporary VM that is destroyed after the
+build, the workspace must be collected as a pipeline output artifact before the environment
+is torn down.
+
+| Scenario | Recommended practice |
+| --- | --- |
+| CI/CD pipeline | Publish workspace as a build artifact; restore it to `dcm_oc_mirror_workspace_dir` at the start of each build run before executing the playbook |
+| Connected machine (`archive_create`) | The workspace lives on the connected machine. If that machine is rebuilt or reprovisioned, restore the workspace from the archived copy before the next `archive_create` run |
+| Bootstrap node (`direct` mode) | Workspace survives bootc upgrades at `/var/srv/containers/oc-mirror/workspace`. Back it up before any OS-level reprovisioning |
+
+### Cincinnati graph bundle
+
+When `dcm_oc_mirror_graph: true` is set, the graph data image is also workspace-state-dependent.
+The workspace records which graph bundle version was last mirrored. On a run where the workspace
+is absent, the full graph bundle is re-fetched in addition to all release and operator content.
+Preserve the workspace to keep graph updates incremental as well.
+
 ## Prerequisites
 
 ### Pull Secret
