@@ -5,6 +5,12 @@ on:  # yamllint disable-line rule:truthy
   push:
     branches:
       - main
+  workflow_dispatch:
+    inputs:
+      oc_mirror_version:
+        description: 'oc-mirror version (e.g. 4.22.0). Defaults to pinned CI version.'
+        required: false
+        default: '4.22.0'
 
 jobs:
   build:
@@ -25,7 +31,9 @@ jobs:
 
       - name: Build container image
         run: |
+          OC_MIRROR_VER="${{ github.event.inputs.oc_mirror_version || '4.22.0' }}"
           podman build \
+            --build-arg OC_MIRROR_VERSION=${OC_MIRROR_VER} \
             -t dcm-oc-mirror:latest \
             -t dcm-oc-mirror:${{ github.sha }} \
             .
