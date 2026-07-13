@@ -407,3 +407,85 @@ ansible-playbook -i inventory playbooks/site.yml \
 
 The playbook reads `config.yaml`, validates catalog names, derives the operator list,
 renders `imageset-config.yaml` (with graph and operator sections), and runs oc-mirror.
+
+## Cluster Resources Output
+
+After every mirror run, oc-mirror v2 writes Kubernetes custom resources to
+`<workspace>/working-dir/cluster-resources/`. These resources configure the OCP cluster
+to pull images from the mirror registry instead of the public Red Hat registries.
+
+| Resource | Purpose |
+| --- | --- |
+| `ImageDigestMirrorSet` (IDMS) | Routes image pulls by digest to the mirror registry |
+| `ImageTagMirrorSet` (ITMS) | Routes image pulls by tag to the mirror registry |
+| `CatalogSource` | Registers the mirrored operator catalog with OLM |
+| `ClusterCatalog` | OLM v1 catalog registration (OCP 4.17+) |
+
+Apply to the cluster after mirroring completes:
+
+```bash
+oc apply -f /srv/containers/oc-mirror/workspace/working-dir/cluster-resources/
+```
+
+When using dcm-bootstrap, these resources are generated from `config.yaml` by the
+`rhvp.ocp_landing_zone` collection during cluster installation. Manual application of
+the oc-mirror-generated CRs is not required in the dcm-bootstrap workflow.
+
+## Container Image Version
+
+The `dcm-oc-mirror` container image bundles the `oc-mirror` binary downloaded from
+`mirror.openshift.com` at image build time. The version is controlled by the
+`OC_MIRROR_VERSION` build argument in the Containerfile (default: `latest`).
+
+`latest` resolves to the newest GA oc-mirror release at the moment the container image
+is built. oc-mirror v2 is backward compatible within its v2 lifecycle — a newer binary
+can mirror content for older OCP versions. However, floating on `latest` means a CI
+rebuild can silently pick up a new major release if Red Hat ever introduces a breaking
+CLI change without a deprecation cycle.
+
+To pin the binary to a specific OCP release:
+
+```bash
+podman build --build-arg OC_MIRROR_VERSION=4.16.0 -t dcm-oc-mirror:4.16 .
+```
+
+Valid version strings are the directory names listed at
+`https://mirror.openshift.com/pub/openshift-v4/clients/ocp/`.
+
+## oc-mirror Compatibility
+
+### Version requirements
+
+oc-mirror v2 is the sole supported engine. All three operating modes (`direct`,
+`archive_create`, `archive_load`) pass `--v2` to the oc-mirror container, which selects
+the v2 engine. Starting with oc-mirror 4.21, `--v1` or `--v2` is mandatory — omitting
+either flag causes a fatal error.
+
+oc-mirror v1 was deprecated in OCP 4.18. Using `--v1` displays a deprecation warning;
+v1 will be removed in a future OCP release.
+
+The `ImageSetConfiguration` API version used by this playbook is
+`mirror.openshift.io/v2alpha1`, which is the correct API for oc-mirror v2 across OCP
+4.14 through at least 4.22.
+
+### OCP 4.22 changes
+
+| Change | Impact |
+| --- | --- |
+| `oc adm release mirror` deprecated | Not applicable — this playbook uses the `oc-mirror` binary, not `oc adm release mirror` |
+| Operator catalog images auto-pinned by digest in `ImageSetConfiguration` | Automatic; no configuration change required |
+| `targetRepo` and `targetTag` fields added to `additionalImages` | Optional new fields for custom mirror paths; not currently exposed in `imageset-config.yaml.j2` |
+
+### Migration from `oc adm release mirror`
+
+If you have existing automation built around `oc adm release mirror`, migrate to this
+playbook. Key differences:
+
+- `oc adm release mirror` mirrors only OCP release images. oc-mirror v2 additionally
+  handles operator catalogs, additional images, and the Cincinnati update graph in a
+  single pass.
+- oc-mirror v2 generates IDMS/ITMS/CatalogSource resources as output; `oc adm release
+  mirror` generates `ImageContentSourcePolicy` (ICSP) resources, which are deprecated
+  in OCP 4.13+.
+- oc-mirror v2 tracks incremental state in the workspace; `oc adm release mirror` is
+  always a full mirror with no delta awareness.
