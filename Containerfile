@@ -1,5 +1,8 @@
 FROM registry.access.redhat.com/ubi9/ubi:9.8
 
+# "latest" resolves to the newest GA oc-mirror binary at image build time.
+# Pin to a specific OCP release version for reproducible builds:
+#   podman build --build-arg OC_MIRROR_VERSION=4.16.0 .
 ARG OC_MIRROR_VERSION=latest
 
 RUN dnf -y install tar && \

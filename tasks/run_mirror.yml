@@ -54,20 +54,25 @@
   when: dcm_oc_mirror_mode == 'archive_create'
 
 - name: Sub | Run oc-mirror in archive load mode
-  ansible.builtin.command:
-    argv:
-      - podman
-      - run
+  vars:
+    _run_opts:
       - --rm
       - -v
       - "{{ dcm_oc_mirror_pull_secret_path }}:/root/.docker/config.json:ro,Z"
       - -v
       - "{{ dcm_oc_mirror_archive_dir }}:/archives:ro,Z"
+      - -v
+      - "{{ dcm_oc_mirror_workspace_dir }}:/workspace:Z"
+    _mirror_cmd:
       - "{{ dcm_oc_mirror_image }}:{{ dcm_oc_mirror_image_tag }}"
       - --v2
       - --from
       - file:///archives
+      - --workspace
+      - /workspace
       - "docker://{{ dcm_oc_mirror_target_registry }}"
+  ansible.builtin.command:
+    argv: "{{ ['podman', 'run'] + _run_opts + _mirror_cmd }}"
   changed_when: true
   when: dcm_oc_mirror_mode == 'archive_load'
 ...
